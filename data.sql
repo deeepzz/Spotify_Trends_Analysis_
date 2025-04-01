@@ -106,3 +106,15 @@ from spotify
 group by track) as t 
 where streamed_on_Spotify > streamed_on_youtube
 and streamed_on_youtube <> 0
+
+--6.Find the top 3 most-viewed tracks for each artist using window functions?
+with cte as (select artist,track,
+sum(views) as total_views,
+dense_rank() over(partition by artist order by sum(views) desc) as row_num
+from spotify
+group by artist ,track
+order by 1,3 desc)
+select artist,track,row_num
+from cte
+where row_num < 4;
+
