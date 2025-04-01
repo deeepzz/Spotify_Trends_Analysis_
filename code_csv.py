@@ -1,7 +1,6 @@
 """Get song titles and artists from Spotify playlist"""
 
 import csv
-import logging
 import os
 import re
 
@@ -14,69 +13,47 @@ load_dotenv()
 
 CLIENT_ID = os.getenv("CLIENT_ID", "")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET", "")
-OUTPUT_DIR = "data"
 OUTPUT_FILE_NAME = "track_info.csv"
 
 # change for your target playlist
-PLAYLIST_LINK = (
-    "https://open.spotify.com/playlist/6jAarBZaMmBLnSIeltPzkz?si=d42be5c6ec194bb9"
+PLAYLIST_LINK = "https://open.spotify.com/playlist/739m9cmQb44KK7PvF9H2ws?si=af8e9a065c374f5f"
+
+# authenticate
+client_credentials_manager = SpotifyClientCredentials(
+    client_id=CLIENT_ID, client_secret=CLIENT_SECRET
 )
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-ch = logging.StreamHandler()
-logger.addHandler(ch)
+# create spotify session object
+session = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
 
-
-def get_playlist_uri_from_link(playlist_link: str) -> str:
-    """Get Spotify playlist URI from Spotify playlist link
-
-    The URI is the bit after 'playlist' but before the '?'
-
-    Example:
-    get_playlist_uri_from_link(
-        "https://open.spotify.com/playlist/6jAarBZaMmBLnSIeltPzkz?si=d42be5c6ec194bb9"
-    )
-    >>> "6jAarBZaMmBLnSIeltPzkz"
-
-    """
-    if match := re.match(r"https://open.spotify.com/playlist/(.*)\?", playlist_link):
-        return match.groups()[0]
+# get uri from https link
+if match := re.match(r"https://open.spotify.com/playlist/(.*)\?", PLAYLIST_LINK):
+    playlist_uri = match.groups()[0]
+else:
     raise ValueError("Expected format: https://open.spotify.com/playlist/...")
 
+# get list of tracks in a given playlist (note: max playlist length 100)
+tracks = session.playlist_tracks(playlist_uri)["items"]
 
-if __name__ == "__main__":
+# create csv file
+with open(OUTPUT_FILE_NAME, "w", encoding="utf-8") as file:
+    writer = csv.writer(file)
+    
+    # write header column names
+    writer.writerow(["track", "artist", "album","popularity", "loudness", "danceability"])
 
-    # authenticate
-    client_credentials_manager = SpotifyClientCredentials(
-        client_id=CLIENT_ID, client_secret=CLIENT_SECRET
-    )
+    # extract name and artist
+    for track in tracks:
+        track_info = track["track"]
+        if not track_info:
+            continue
+        name = track["track"]["name"]
+        artists = ", ".join(
+            [artist["name"] for artist in track["track"]["artists"]]
+        )
+        album = track_info["album"]["name"]
+        popularity = track_info.get("popularity", "")
+        track_id = track_info.get("id", "")
 
-    # create spotify session object
-    session = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
-
-    logger.info("Authenticated succesfully")
-
-    # get uri from https link
-    playlist_uri = get_playlist_uri_from_link(PLAYLIST_LINK)
-
-    # get list of tracks in a given playlist (note: max playlist length 100)
-    tracks = session.playlist_tracks(playlist_uri)["items"]
-
-    # create csv file
-    file_path = "/".join([OUTPUT_DIR, OUTPUT_FILE_NAME])
-    with open(file_path, "w", encoding="utf-8") as file:
-        writer = csv.writer(file)
-        writer.writerow(["track", "artist"])
-
-        # extract name and artist
-        for track in tracks:
-            name = track["track"]["name"]
-            artists = ", ".join(
-                [artist["name"] for artist in track["track"]["artists"]]
-            )
-
-            # write to csv
-            writer.writerow([name, artists])
-
-    logger.info("Extracted data saved in %s", file_path)
+        # write to csv
+        writer.writerow([name, artists, album, popularity,track_id])
