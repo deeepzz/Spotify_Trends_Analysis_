@@ -40,7 +40,7 @@ with open(OUTPUT_FILE_NAME, "w", encoding="utf-8") as file:
     writer = csv.writer(file)
     
     # write header column names
-    writer.writerow(["track", "artist", "album","popularity", "loudness", "danceability"])
+    writer.writerow(["track", "artist", "album","popularity", "track id"])
 
     # extract name and artist
     for track in tracks:
@@ -55,8 +55,5 @@ with open(OUTPUT_FILE_NAME, "w", encoding="utf-8") as file:
         popularity = track_info.get("popularity", "")
         track_id = track_info.get("id", "")
 
-        audio_features = sp.audio_features([track_id])[0] if track_id else None
-        loudness = audio_features["loudness"] if audio_features else ""
-        danceability = audio_features["danceability"] if audio_features else ""
-
-        writer.writerow([name, artists, album, popularity, loudness, danceability])
+        # write to csv
+        writer.writerow([name, artists, album, popularity,track_id])
