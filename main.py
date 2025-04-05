@@ -10,10 +10,10 @@ import seaborn as sns
 from wordcloud import WordCloud
 
 # Configuration de la page
-st.set_page_config(page_title="Analyse Spotify", layout="wide")
+st.set_page_config(page_title="Analyse spotify playlist", layout="wide")
 
 # Titre
-st.title("Analyse interactive de playlists Spotify")
+st.title("Analyse de votre playlist spotify ;) ")
 
 # Chargement des identifiants API
 load_dotenv()
@@ -33,7 +33,7 @@ def extract_playlist_id(link):
         return link.strip()
 
 # Champ de saisie utilisateur
-playlist_input = st.text_input("Entrez le lien ou l’ID d’une playlist Spotify :", "")
+playlist_input = st.text_input("Entrez le lien ou l’ID de votre playlist Spotify :", "")
 
 if playlist_input:
     playlist_id = extract_playlist_id(playlist_input)
@@ -41,7 +41,7 @@ if playlist_input:
     try:
         # Récupération des pistes
         results = sp.playlist_tracks(playlist_id)
-        tracks = results["items"]
+        tracks = results.get("items")
         data = []
         for track in tracks:
             info = track["track"]
@@ -63,9 +63,10 @@ if playlist_input:
             st.success(f"{len(df)} titres extraits depuis la playlist.")
             st.dataframe(df)
 
+
             # Popularité par morceau
-            st.subheader("Popularité des morceaux (Top 30)")
-            df_sorted = df.sort_values(by="popularity", ascending=False).head(30)
+            st.subheader("Top 50 : ")
+            df_sorted = df.sort_values(by="popularity", ascending=False).head(50)
             fig1, ax = plt.subplots(figsize=(14, 6))
             sns.barplot(data=df_sorted, x="track", y="popularity", ax=ax)
             ax.set_title("Popularité des morceaux", fontsize=16, weight='bold')
@@ -75,23 +76,15 @@ if playlist_input:
             st.pyplot(fig1)
 
             # Top artistes
-            st.subheader("Top 5 artistes les plus présents")
-            top_artists = df["artist"].value_counts().head(5)
+            st.subheader("Top 10 artistes")
+            top_artists = df["artist"].value_counts().head(10)
             st.bar_chart(top_artists)
 
             # Titres les plus populaires
-            st.subheader("Titres les plus populaires")
-            top_tracks = df.sort_values(by="popularity", ascending=False).head(5)
+            st.subheader("Tes 10 chansons préférés")
+            top_tracks = df.sort_values(by="popularity", ascending=False).head(10)
             st.table(top_tracks[["track", "artist", "popularity"]])
 
-            # Nuage de mots
-            if st.checkbox("Afficher le nuage de mots des titres"):
-                text = " ".join(df["track"].dropna())
-                wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text)
-                fig2, ax = plt.subplots(figsize=(10, 4))
-                ax.imshow(wordcloud, interpolation="bilinear")
-                ax.axis("off")
-                st.pyplot(fig2)
 
     except Exception as e:
         st.error(f"Erreur lors de la récupération de la playlist : {e}")
