@@ -13,7 +13,7 @@ from wordcloud import WordCloud
 st.set_page_config(page_title="Analyse Spotify", layout="wide")
 
 # Titre
-st.title("🎧 Analyse interactive de playlists Spotify")
+st.title("Analyse interactive de playlists Spotify")
 
 # Chargement des identifiants API
 load_dotenv()
@@ -30,10 +30,10 @@ def extract_playlist_id(link):
     if match:
         return match.group(1)
     else:
-        return link.strip()  # L’utilisateur a peut-être juste collé l’ID
+        return link.strip()
 
 # Champ de saisie utilisateur
-playlist_input = st.text_input("🔗 Entrez le lien ou l’ID d’une playlist Spotify :", "")
+playlist_input = st.text_input("Entrez le lien ou l’ID d’une playlist Spotify :", "")
 
 if playlist_input:
     playlist_id = extract_playlist_id(playlist_input)
@@ -42,20 +42,20 @@ if playlist_input:
         # Récupération des pistes
         results = sp.playlist_tracks(playlist_id)
         tracks = results["items"]
-
-        # Construction du DataFrame
         data = []
         for track in tracks:
             info = track["track"]
             if info:
                 name = info["name"]
-                artists = ", ".join([artist["name"] for artist in info["artists"]])
+                artists_info = info["artists"]
+                artists = ", ".join([artist["name"] for artist in artists_info])
                 album = info["album"]["name"]
-                popularity = info.get("popularity", None)
                 track_id = info.get("id", "")
-                data.append([name, artists, album, popularity, track_id])
+                release_date = info["album"].get("release_date", None)
+                popularity = info.get("popularity", None)
 
-        df = pd.DataFrame(data, columns=["track", "artist", "album", "popularity", "track_id"])
+            data.append([name, artists, album, release_date, popularity, track_id])
+        df = pd.DataFrame(data, columns=["track", "artist", "album", "release_data", "popularity", "track_id"])
 
         if df.empty:
             st.warning("Aucun titre trouvé dans cette playlist.")
@@ -63,24 +63,29 @@ if playlist_input:
             st.success(f"{len(df)} titres extraits depuis la playlist.")
             st.dataframe(df)
 
-            # --- Analyses des tendances musicales ---
-
-            st.subheader("📊 Distribution de la popularité")
-            fig1 = plt.figure()
-            sns.histplot(df["popularity"].dropna(), bins=10, kde=True)
-            plt.xlabel("Popularité")
+            # Popularité par morceau
+            st.subheader("Popularité des morceaux (Top 30)")
+            df_sorted = df.sort_values(by="popularity", ascending=False).head(30)
+            fig1, ax = plt.subplots(figsize=(14, 6))
+            sns.barplot(data=df_sorted, x="track", y="popularity", ax=ax)
+            ax.set_title("Popularité des morceaux", fontsize=16, weight='bold')
+            ax.set_xlabel("Titre", fontsize=12)
+            ax.set_ylabel("Popularité", fontsize=12)
+            plt.xticks(rotation=90)
             st.pyplot(fig1)
 
-            st.subheader("🎤 Top 5 artistes les plus présents")
+            # Top artistes
+            st.subheader("Top 5 artistes les plus présents")
             top_artists = df["artist"].value_counts().head(5)
             st.bar_chart(top_artists)
 
-            st.subheader("🎵 Titres les plus populaires")
+            # Titres les plus populaires
+            st.subheader("Titres les plus populaires")
             top_tracks = df.sort_values(by="popularity", ascending=False).head(5)
             st.table(top_tracks[["track", "artist", "popularity"]])
 
             # Nuage de mots
-            if st.checkbox("🌀 Afficher le nuage de mots des titres"):
+            if st.checkbox("Afficher le nuage de mots des titres"):
                 text = " ".join(df["track"].dropna())
                 wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text)
                 fig2, ax = plt.subplots(figsize=(10, 4))
