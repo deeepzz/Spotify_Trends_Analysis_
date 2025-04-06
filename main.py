@@ -1,28 +1,28 @@
 import streamlit as st
 import pandas as pd
 import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
 from dotenv import load_dotenv
 import os
 import re
+import json
+import requests
+import statistics
+from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
 from wordcloud import WordCloud
+from spotipy.oauth2 import SpotifyClientCredentials
 
-# Configuration de la page
 st.set_page_config(page_title="Analyse spotify playlist", layout="wide")
-
-# Titre
 st.title("Analyse de votre playlist spotify ;) ")
 
-# Chargement des identifiants API
-load_dotenv()
-CLIENT_ID = os.getenv("CLIENT_ID")
-CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+# Fonction pour extraire l'ID depuis un lien
+def extract_playlist_id(link):
+    match = re.match(r"https://open.spotify.com/playlist/([a-zA-Z0-9]+)", link)
+    return match.group(1) if match else link.strip()
 
-# Authentification Spotipy
-#client_credentials_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-#sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+# Champ de saisie utilisateur
+playlist_input = st.text_input("Entrez le lien ou l’ID de votre playlist Spotify :", "")
 
 # Authentification Spotipy via token sauvegardé par Flask
 try:
@@ -56,47 +56,53 @@ except Exception as e:
     st.error(f"Token invalide : {e}. Va sur `/login` pour t’authentifier.")
     st.stop()
 
-# Fonction pour extraire l'ID depuis un lien complet
-def extract_playlist_id(link):
-    match = re.match(r"https://open.spotify.com/playlist/([a-zA-Z0-9]+)", link)
-    if match:
-        return match.group(1)
-    else:
-        return link.strip()
-
-# Champ de saisie utilisateur
-playlist_input = st.text_input("Entrez le lien ou l’ID de votre playlist Spotify :", "")
-
 if playlist_input:
     playlist_id = extract_playlist_id(playlist_input)
 
     try:
-        # Récupération des pistes
         results = sp.playlist_tracks(playlist_id)
-        tracks = results.get("items")
+        tracks = results['items']
+        while results['next']:
+            results = sp.next(results)
+            tracks.extend(results['items'])
+
         data = []
         for track in tracks:
-            info = track["track"]
+            info = track.get("track")
             if info:
-                name = info["name"]
-                artists_info = info["artists"]
-                artists = ", ".join([artist["name"] for artist in artists_info])
-                album = info["album"]["name"]
-                track_id = info.get("id", "")
-                release_date = info["album"].get("release_date", None)
-                popularity = info.get("popularity", None)
+                name = info.get("name")
+                primary_artist = info.get("artists", [{}])[0].get("name")
+                album = info["album"].get("name")
+                track_id = info.get("id")
+                release_date = info["album"].get("release_date")
+                popularity = info.get("popularity")
 
-            data.append([name, artists, album, release_date, popularity, track_id])
-        df = pd.DataFrame(data, columns=["track", "artist", "album", "release_data", "popularity", "track_id"])
+                # Get primary artist ID and fetch genres
+                artist_id = info.get("artists", [{}])[0].get("id")
+                genres = []
+                if artist_id:
+                    try:
+                        artist_data = sp.artist(artist_id)
+                        genres = artist_data.get("genres", [])
+                    except:
+                        genres = []
+
+                data.append([name, primary_artist, album, release_date, popularity, track_id, ", ".join(genres)])
+
+        df = pd.DataFrame(data, columns=["track", "artist", "album", "release_data", "popularity", "track_id", "genres"])
+
+        load_dotenv()
+        CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID")
+        CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET")
+        client_credentials_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
 
         if df.empty:
             st.warning("Aucun titre trouvé dans cette playlist.")
         else:
             st.success(f"{len(df)} titres extraits depuis la playlist.")
+
             st.dataframe(df)
 
-
-            # Popularité par morceau
             st.subheader("Top 50 : ")
             df_sorted = df.sort_values(by="popularity", ascending=False).head(50)
             fig1, ax = plt.subplots(figsize=(14, 6))
@@ -107,16 +113,28 @@ if playlist_input:
             plt.xticks(rotation=90)
             st.pyplot(fig1)
 
-            # Top artistes
             st.subheader("Top 10 artistes")
             top_artists = df["artist"].value_counts().head(10)
             st.bar_chart(top_artists)
 
-            # Titres les plus populaires
-            st.subheader("Tes 10 chansons préférés")
+            st.subheader("Tes 10 chansons préférées")
             top_tracks = df.sort_values(by="popularity", ascending=False).head(10)
             st.table(top_tracks[["track", "artist", "popularity"]])
 
+            st.subheader("Genres les plus fréquents")
+            genre_counts = df["genres"].str.split(", ").explode().value_counts().head(10)
+            st.bar_chart(genre_counts)
+
+            st.subheader("Répartition des morceaux par année de sortie")
+            df["release_year"] = pd.to_datetime(df["release_data"], errors='coerce').dt.year
+            year_counts = df["release_year"].value_counts().sort_index()
+            fig_years, ax_years = plt.subplots(figsize=(10, 4))
+            sns.barplot(x=year_counts.index.astype(str), y=year_counts.values, ax=ax_years)
+            ax_years.set_title("Nombre de morceaux par année", fontsize=14)
+            ax_years.set_xlabel("Année")
+            ax_years.set_ylabel("Nombre de morceaux")
+            plt.xticks(rotation=45)
+            st.pyplot(fig_years)
 
     except Exception as e:
         st.error(f"Erreur lors de la récupération de la playlist : {e}")
