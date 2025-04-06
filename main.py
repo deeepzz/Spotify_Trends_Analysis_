@@ -21,8 +21,40 @@ CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 
 # Authentification Spotipy
-client_credentials_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
-sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+#client_credentials_manager = SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
+#sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+
+# Authentification Spotipy via token sauvegardé par Flask
+try:
+    with open("spotify_token.json", "r") as f:
+        token_info = json.load(f)
+        access_token = token_info.get("access_token")
+        expires_at = token_info.get("expires_at")
+
+        if not access_token:
+            raise ValueError("access_token manquant")
+
+        now = datetime.now().timestamp()
+        if expires_at and now > expires_at:
+            st.warning("Token expiré, tentative de rafraîchissement...")
+            refresh_url = "https://curly-cod-4xw6rvj9wpxc7q44-8502.app.github.dev/refresh-token"
+            refresh_response = requests.get(refresh_url)
+            if refresh_response.status_code == 200:
+                with open("spotify_token.json", "r") as f:
+                    token_info = json.load(f)
+                    access_token = token_info.get("access_token")
+                    if not access_token:
+                        raise ValueError("Token toujours manquant après rafraîchissement.")
+                    st.success("Token rafraîchi !")
+            else:
+                st.error("Échec du rafraîchissement automatique du token.")
+                st.stop()
+
+        sp = spotipy.Spotify(auth=access_token)
+
+except Exception as e:
+    st.error(f"Token invalide : {e}. Va sur `/login` pour t’authentifier.")
+    st.stop()
 
 # Fonction pour extraire l'ID depuis un lien complet
 def extract_playlist_id(link):
