@@ -80,8 +80,7 @@ def callback():
                 "expires_at": session['expires_at']
             }, f)
 
-        # Redirection vers une confirmation (ou vers Streamlit)
-        return redirect("http://localhost:8501")  # facultatif
+        return redirect("http://localhost:8501") 
 
     except Exception as e:
         return f"Erreur dans /callback : {e}", 500
