@@ -14,15 +14,25 @@ app.secret_key = '3f1a5e11c3a1b76fdf5824b3887391ae34'
 load_dotenv()
 CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET")
-REDIRECT_URI = 'https://curly-cod-4xw6rvj9wpxc7q44-8502.app.github.dev/callback'
-
-
+REDIRECT_URI = 'https://cuddly-space-lamp-wwgx45rjg7whgp49-8503.app.github.dev/callback' 
 
 # Spotify URLs
 AUTH_URL = 'https://accounts.spotify.com/authorize'
 TOKEN_URL = 'https://accounts.spotify.com/api/token'
 API_BASE_URL = 'https://api.spotify.com/v1/'
 
+# Chemin absolu pour le token
+TOKEN_PATH = os.path.join(os.getcwd(), "spotify_token.json")
+
+# Initialisation du token avec toutes les clés attendues
+if not os.path.exists(TOKEN_PATH) or os.path.getsize(TOKEN_PATH) == 0:
+    with open(TOKEN_PATH, "w") as f:
+        json.dump({
+            "access_token": "",
+            "refresh_token": "",
+            "expires_in": 0,
+            "expires_at": 0
+        }, f)
 
 @app.route('/')
 def home():
@@ -31,11 +41,11 @@ def home():
     <p><a href="/login">Clique ici pour te connecter avec Spotify</a></p>
     '''
 
-
 @app.route('/login')
 def login():
-    scope = 'playlist-read-private user-read-email'
-
+    # AJOUT DES SCOPES NÉCESSAIRES POUR LES AUDIO FEATURES
+    scope = 'playlist-read-private user-library-read user-top-read user-read-private'
+    
     params = {
         'client_id': CLIENT_ID,
         'response_type': 'code',
@@ -46,7 +56,6 @@ def login():
 
     auth_url = f"{AUTH_URL}?{urlencode(params)}"
     return redirect(auth_url)
-
 
 @app.route('/callback')
 def callback():
@@ -63,29 +72,30 @@ def callback():
                 'client_secret': CLIENT_SECRET
             }
 
-        response = requests.post(TOKEN_URL, data=req_body)
-        token_info = response.json()
+            response = requests.post(TOKEN_URL, data=req_body)
+            token_info = response.json()
 
-        # Stockage session Flask
-        session['access_token'] = token_info['access_token']
-        session['refresh_token'] = token_info.get('refresh_token')
-        session['expires_at'] = datetime.now().timestamp() + token_info['expires_in']
+            # Stockage session Flask
+            session['access_token'] = token_info['access_token']
+            session['refresh_token'] = token_info.get('refresh_token')
+            session['expires_at'] = datetime.now().timestamp() + token_info['expires_in']
 
-        # Sauvegarde pour Streamlit
-        with open("spotify_token.json", "w") as f:
-            json.dump({
-                "access_token": token_info['access_token'],
-                "refresh_token": token_info.get('refresh_token'),
-                "expires_in": token_info['expires_in'],
-                "expires_at": session['expires_at']
-            }, f)
+            # Sauvegarde pour Streamlit
+            with open("spotify_token.json", "w") as f:
+                json.dump({
+                    "access_token": token_info['access_token'],
+                    "refresh_token": token_info.get('refresh_token'),
+                    "expires_in": token_info['expires_in'],
+                    "expires_at": session['expires_at']
+                }, f)
 
-        return redirect("http://localhost:8501") 
+            return redirect("https://cuddly-space-lamp-wwgx45rjg7whgp49-8501.app.github.dev/") 
+
+        else:
+            return "Code d'autorisation manquant", 400
 
     except Exception as e:
         return f"Erreur dans /callback : {e}", 500
-
-
 
 @app.route('/refresh-token')
 def refresh_token():
@@ -128,6 +138,10 @@ def refresh_token():
 
     return "Token encore valide, pas besoin de rafraîchir."
 
-
 if __name__ == "__main__":
-    app.run(port=8502)
+    if not os.path.exists("spotify_token.json"):
+        print("Token invalide : spotify_token.json introuvable; Va sur /login pour t’authentifier.")
+    else:
+        print("Fichier token trouvé. Lancement du serveur Flask.")
+    
+    app.run(port=8503)
